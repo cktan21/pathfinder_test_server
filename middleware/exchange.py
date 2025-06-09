@@ -54,7 +54,7 @@ def call_endpoint_threaded():
         block_number = path_finder_response["blockNumber"]
         block_hash = get_block_hash(block_number)
         
-        output_filename = f"./path_finder_output/path_finder_response_{block_number}.json"
+        output_filename = f"../json/path_finder_output/path_finder_response_{block_number}.json"
         try:
             with open(output_filename, 'w') as f: # Use 'w' to overwrite, 'a' to append
                 json.dump(path_finder_response, f, indent=4) # indent for pretty printing
