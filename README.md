@@ -1,9 +1,13 @@
-# How to Use
+# Pathfinder Test Server
 
-## Local Deployement
+## Prerequisite
+IDE (Any) <br>
+Github Desktop (If you prefer else CLI) <br>
 
+## Instructions
+
+> Local Deployment
 - runs on http://localhost:8080/
-
 ```bash
 cargo run
 
@@ -305,3 +309,26 @@ cd ../data_ingestor_json_retreival
 ```
 
 > full response in output.json
+
+
+## Technologies Utilised
+
+<p align="center"><strong>Backend and Data Frameworks</strong></p>
+<p align="center">
+<a href="https://actix.rs/"><img src="https://actix.rs/img/logo.svg" alt="Actix Web" height="40"/></a>&nbsp;&nbsp;
+<a href="https://www.rust-lang.org/"><img src="https://upload.wikimedia.org/wikipedia/commons/d/d5/Rust_programming_language_black_logo.svg" alt="Rust" height="40"/></a>&nbsp;&nbsp;
+<a href="https://web3py.readthedocs.io/en/stable/"><img src="https://web3py.readthedocs.io/en/stable/_static/web3py_logo.png" alt="Web3.py" height="40"/></a>&nbsp;&nbsp;
+<br>
+<i>Actix Web · Rust · Web3.py</i>
+</p> 
+<br>
+
+<p align="center"><strong>Development Tools and Languages</strong></p>
+<p align="center">
+<a href="https://www.python.org/"><img src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Python-logo-notext.svg" alt="Python" height="40"/></a>&nbsp;&nbsp;
+<a href="https://tycho.codes/"><img src="https://tycho.codes/img/tycho-logo-color.svg" alt="Tycho" height="40"/></a>&nbsp;&nbsp;
+</p>
+<p align="center">
+<i>Python · Tycho</i>
+</p>
+<br>

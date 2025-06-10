@@ -128,7 +128,7 @@ pub async fn get_block_state(
 
     // Optionally Save to JSON
     let json_output = serde_json::to_string_pretty(&tbr)?;
-    let mut file = File::create(format!("./json/state_outputs/liquidity_state_data_{bloc_no}.json"))?;
+    let mut file = File::create(format!("./json/states/liquidity_state_data_{bloc_no}.json"))?;
     file.write_all(json_output.as_bytes())?;
 
     Ok(serde_json::to_value(tbr)?)
