@@ -1,5 +1,4 @@
 use futures::stream::{FuturesUnordered, StreamExt};
-
 use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE, AUTHORIZATION};
 use serde::{Deserialize, Serialize};
@@ -40,8 +39,6 @@ pub async fn get_block_state(
     let bloc_hash = block_hash.unwrap_or("0x878ccb82e46332081d32b7e2c9c81976a4cd8dcefe327ef6e6432460527ae272");
     let bloc_no = block_number.unwrap_or(22637843);
 
-    info!("Fetching block state for hash: {}, number: {}", bloc_hash, bloc_no);
-
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(AUTHORIZATION, HeaderValue::from_static("7cdb5b0f-7ab7-4162-8d77-e142819f2144"));
@@ -50,17 +47,15 @@ pub async fn get_block_state(
     let mut tbr = HashMap::<&'static str, HashMap<String, serde_json::Value>>::new();
 
     let proc_system_res = client
-        .post("https://tycho-beta.propellerheads.xyz/v1/protocol_systems")   
+        .post("https://tycho-beta.propellerheads.xyz/v1/protocol_systems")
         .headers(headers.clone())
         .json(&json!({ "chain": "ethereum" }))
         .send()
         .await?;
 
-    info!("Fetched protocol systems");
-
     let proc_systems: ProtocolSystemsResponse = proc_system_res.json().await?;
-    debug!("Protocol systems received: {:?}", proc_systems.protocol_systems);
 
+    // Parallel over protocol systems (excluding "balancer_v3")
     let mut tasks = FuturesUnordered::new();
     for system in proc_systems.protocol_systems {
         if system == "balancer_v3" {
@@ -78,7 +73,7 @@ pub async fn get_block_state(
 
             loop {
                 let state_res = client
-                    .post("https://tycho-beta.propellerheads.xyz/v1/protocol_state")   
+                    .post("https://tycho-beta.propellerheads.xyz/v1/protocol_state")
                     .headers(headers.clone())
                     .json(&json!({
                         "protocol_system": &system,
@@ -97,80 +92,74 @@ pub async fn get_block_state(
                     .send()
                     .await;
 
-                match state_res {
-                    Ok(res) => {
-                        debug!("Received state response for system {} page {}", system, n);
-                        let state_data: ProtocolStateResponse = match res.json().await {
-                            Ok(data) => data,
-                            Err(e) => {
-                                error!("Failed to decode state JSON for system {} page {}: {}", system, n, e);
-                                return None;
-                            }
-                        };
-
-                        if state_data.states.is_empty() {
-                            info!("No states found for system {} page {}", system, n);
-                            break;
+                let state_data: ProtocolStateResponse = match state_res {
+                    Ok(res) => match res.json().await {
+                        Ok(data) => data,
+                        Err(e) => {
+                            eprintln!("Failed to decode state JSON for system {} page {}: {}", system, n, e);
+                            continue;
                         }
-
-                        // Parallelize component fetches
-                        let mut component_futures = FuturesUnordered::new();
-                        for state in state_data.states {
-                            let state_clone = state.clone();
-                            let client = client.clone();
-                            let headers = headers.clone();
-                            let system = system.clone();
-
-                            component_futures.push(async move {
-                                let component_res = client
-                                    .post("https://tycho-beta.propellerheads.xyz/v1/protocol_components")   
-                                    .headers(headers.clone())
-                                    .json(&json!({
-                                        "chain": "ethereum",
-                                        "protocol_system": system,
-                                        "component_ids": [state_clone.component_id.clone()]
-                                    }))
-                                    .send()
-                                    .await;
-
-                                match component_res {
-                                    Ok(resp) => {
-                                        debug!("Received component response for component {}", state_clone.component_id);
-                                        match resp.json::<ComponentResponse>().await {
-                                            Ok(component_data) => {
-                                                let mut entry = serde_json::Map::new();
-                                                entry.insert("state".to_string(), serde_json::to_value(state_clone).unwrap());
-                                                entry.insert("component".to_string(), serde_json::to_value(component_data.protocol_components).unwrap());
-                                                info!("Successfully decoded component JSON for {}", state_clone.component_id);
-                                                Some((entry["state"]["component_id"].as_str().unwrap().to_string(), serde_json::Value::Object(entry)))
-                                            },
-                                            Err(e) => {
-                                                error!("Failed to decode component JSON for {}: {}", state_clone.component_id, e);
-                                                None
-                                            }
-                                        }
-                                    },
-                                    Err(e) => {
-                                        error!("Failed to fetch component for {}: {}", state_clone.component_id, e);
-                                        None
-                                    }
-                                }
-                            });
-                        }
-
-                        while let Some(result) = component_futures.next().await {
-                            if let Some((key, value)) = result {
-                                snapshot_states.insert(key, value);
-                            }
-                        }
-
-                        n += 1;
                     },
                     Err(e) => {
-                        error!("Failed to fetch state for system {} page {}: {}", system, n, e);
-                        return None;
+                        eprintln!("Failed to fetch state for system {} page {}: {}", system, n, e);
+                        continue;
+                    }
+                };
+
+                if state_data.states.is_empty() {
+                    break;
+                }
+
+                // Parallelize component fetches
+                let mut component_futures = FuturesUnordered::new();
+                for state in state_data.states {
+                    let state_clone = state.clone();
+                    let client = client.clone();
+                    let headers = headers.clone();
+                    let system = system.clone();
+
+                    component_futures.push(async move {
+                        let component_res = client
+                            .post("https://tycho-beta.propellerheads.xyz/v1/protocol_components")
+                            .headers(headers.clone())
+                            .json(&json!({
+                                "chain": "ethereum",
+                                "protocol_system": system,
+                                "component_ids": [state_clone.component_id.clone()]
+                            }))
+                            .send()
+                            .await;
+
+                        match component_res {
+                            Ok(resp) => match resp.json::<ComponentResponse>().await {
+                                Ok(component_data) => {
+                                    let mut entry = serde_json::Map::new();
+                                    entry.insert("state".to_string(), serde_json::to_value(state_clone).unwrap());
+                                    entry.insert("component".to_string(), serde_json::to_value(component_data.protocol_components).unwrap());
+                                    eprintln!("Successfully decoded component JSON");
+
+                                    Some((entry["state"]["component_id"].as_str().unwrap().to_string(), serde_json::Value::Object(entry)))
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to decode component JSON for {}: {}", state_clone.component_id, e);
+                                    None
+                                }
+                            },
+                            Err(e) => {
+                                eprintln!("Failed to fetch component for {}: {}", state_clone.component_id, e);
+                                None
+                            }
+                        }
+                    });
+                }
+
+                while let Some(result) = component_futures.next().await {
+                    if let Some((key, value)) = result {
+                        snapshot_states.insert(key, value);
                     }
                 }
+
+                n += 1;
             }
 
             let protocol_entry = json!({
@@ -201,8 +190,6 @@ pub async fn get_block_state(
     let json_output = serde_json::to_string_pretty(&tbr)?;
     let mut file = File::create(format!("./json/states/liquidity_state_data_{bloc_no}.json"))?;
     file.write_all(json_output.as_bytes())?;
-
-    info!("Block state saved to file");
 
     Ok(serde_json::to_value(tbr)?)
 }
