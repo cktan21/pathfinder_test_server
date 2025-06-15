@@ -6,6 +6,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use tracing::{info, error, debug};
 
 #[derive(Debug, Deserialize)]
 struct ProtocolSystemsResponse {
@@ -39,6 +40,8 @@ pub async fn get_block_state(
     let bloc_hash = block_hash.unwrap_or("0x878ccb82e46332081d32b7e2c9c81976a4cd8dcefe327ef6e6432460527ae272");
     let bloc_no = block_number.unwrap_or(22637843);
 
+    info!("Fetching block state at hash={}, number={}", bloc_hash, bloc_no);
+
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(AUTHORIZATION, HeaderValue::from_static("7cdb5b0f-7ab7-4162-8d77-e142819f2144"));
@@ -54,11 +57,12 @@ pub async fn get_block_state(
         .await?;
 
     let proc_systems: ProtocolSystemsResponse = proc_system_res.json().await?;
+    info!("Received {} protocol systems", proc_systems.protocol_systems.len());
 
-    // Parallel over protocol systems (excluding "balancer_v3")
     let mut tasks = FuturesUnordered::new();
     for system in proc_systems.protocol_systems {
         if system == "balancer_v3" {
+            debug!("Skipping system: balancer_v3");
             continue;
         }
 
@@ -96,12 +100,12 @@ pub async fn get_block_state(
                     Ok(res) => match res.json().await {
                         Ok(data) => data,
                         Err(e) => {
-                            eprintln!("Failed to decode state JSON for system {} page {}: {}", system, n, e);
+                            error!("Decode state JSON failed for system={} page={}: {}", system, n, e);
                             continue;
                         }
                     },
                     Err(e) => {
-                        eprintln!("Failed to fetch state for system {} page {}: {}", system, n, e);
+                        error!("Fetch state failed for system={} page={}: {}", system, n, e);
                         continue;
                     }
                 };
@@ -110,7 +114,6 @@ pub async fn get_block_state(
                     break;
                 }
 
-                // Parallelize component fetches
                 let mut component_futures = FuturesUnordered::new();
                 for state in state_data.states {
                     let state_clone = state.clone();
@@ -136,17 +139,17 @@ pub async fn get_block_state(
                                     let mut entry = serde_json::Map::new();
                                     entry.insert("state".to_string(), serde_json::to_value(state_clone).unwrap());
                                     entry.insert("component".to_string(), serde_json::to_value(component_data.protocol_components).unwrap());
-                                    eprintln!("Successfully decoded component JSON");
+                                    debug!("Decoded component JSON successfully");
 
                                     Some((entry["state"]["component_id"].as_str().unwrap().to_string(), serde_json::Value::Object(entry)))
                                 }
                                 Err(e) => {
-                                    eprintln!("Failed to decode component JSON for {}: {}", state_clone.component_id, e);
+                                    error!("Decode component JSON failed for component={}: {}", state_clone.component_id, e);
                                     None
                                 }
                             },
                             Err(e) => {
-                                eprintln!("Failed to fetch component for {}: {}", state_clone.component_id, e);
+                                error!("Fetch component failed for component={}: {}", state_clone.component_id, e);
                                 None
                             }
                         }
@@ -178,7 +181,6 @@ pub async fn get_block_state(
         }));
     }
 
-    // Collect results
     while let Some(res) = tasks.next().await {
         if let Ok(Some((system, entry))) = res {
             dict_store.insert(system, entry);
@@ -188,8 +190,10 @@ pub async fn get_block_state(
     tbr.insert("state_msgs", dict_store);
 
     let json_output = serde_json::to_string_pretty(&tbr)?;
-    let mut file = File::create(format!("./json/states/liquidity_state_data_{bloc_no}.json"))?;
+    let mut file = File::create(format!("./json/states/liquidity_state_data_{}.json", bloc_no))?;
     file.write_all(json_output.as_bytes())?;
+
+    info!("Saved block state to ./json/states/liquidity_state_data_{}.json", bloc_no);
 
     Ok(serde_json::to_value(tbr)?)
 }

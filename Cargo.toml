@@ -16,7 +16,7 @@ dotenv = "0.15"
 clap = "4.5.40"
 num-bigint = "0.4.6" 
 futures = "0.3.31"
-log = "0.4"
-env_logger = "0.11.0"
+tracing = "0.1"
+tracing-appender = "0.2"
 # tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git",  branch = "main" }
 tycho-simulation = { path = "../tycho-simulation" }

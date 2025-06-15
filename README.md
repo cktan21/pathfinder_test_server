@@ -9,6 +9,11 @@ Github Desktop (If you prefer else CLI) <br>
 > Local Deployment
 - runs on http://localhost:8080/
 ```bash
+# For Debug mode
+set RUST_LOG=debug
+$env:RUST_LOG = "debug"
+
+# Run and Compile the API
 cargo run
 
 ## if you want the tycho-simulation files stored locally
