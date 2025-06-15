@@ -7672,7 +7672,7 @@ dependencies = [
 
 [[package]]
 name = "tycho-simulation"
-version = "0.110.0"
+version = "0.116.0"
 dependencies = [
  "alloy",
  "chrono",
