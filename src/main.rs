@@ -97,7 +97,7 @@ async fn tokens() -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Logging setup with file output
-    let file_appender = tracing_appender::rolling::hourly("../logs/22694045", "server.log");
+    let file_appender = tracing_appender::rolling::hourly("../logs/22637843", "server.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     
     tracing_subscriber::fmt()
